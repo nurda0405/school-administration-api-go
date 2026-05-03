@@ -18,6 +18,8 @@ func GetTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	var teachers []models.Teacher
 	teachers, err := sqlconnect.GetTeachersDBHandler(teachers, r)
 	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	response := struct {
@@ -40,12 +42,15 @@ func GetOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		fmt.Println(err)
+		http.Error(w, "Invalid ID parameter", http.StatusInternalServerError)
 		return
 	}
 
 	teacher, err := sqlconnect.GetTeacherByID(id)
 
 	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -57,6 +62,8 @@ func GetOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 func AddTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	newTeachers, err := sqlconnect.AddNewTeachersHandler(r)
 	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -92,6 +99,11 @@ func UpdateTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updatedTeacherFromDB, err := sqlconnect.UpdateTeacher(updatedTeacher, id)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updatedTeacherFromDB)
 
@@ -109,6 +121,7 @@ func PatchTeachersHandler(w http.ResponseWriter, r *http.Request) {
 	err = sqlconnect.PatchTeachers(updates)
 	if err != nil {
 		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -132,6 +145,7 @@ func PatchOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	updatedTeacher, err := sqlconnect.PatchOneTeacher(id, updates)
 	if err != nil {
 		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -140,69 +154,18 @@ func PatchOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteTeachersHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := sqlconnect.ConnectDB()
-	if err != nil {
-		http.Error(w, "Error in connecting to database", http.StatusInternalServerError)
-		return
-	}
-
-	defer db.Close()
-
 	var ids []int
-	err = json.NewDecoder(r.Body).Decode(&ids)
+	err := json.NewDecoder(r.Body).Decode(&ids)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
-	tx, err := db.Begin()
+	deletedIDs, err := sqlconnect.DeleteTeachers(ids)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, "Error starting transaction", http.StatusInternalServerError)
-		return
-	}
-
-	stmt, err := tx.Prepare("DELETE FROM teachers WHERE id = ?")
-	if err != nil {
-		log.Println(err)
-		tx.Rollback()
-		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
-		return
-	}
-	defer stmt.Close()
-
-	deletedIDs := []int{}
-	for _, id := range ids {
-		res, err := stmt.Exec(id)
-		if err != nil {
-			log.Println(err)
-			tx.Rollback()
-			http.Error(w, "Error deleting teacher", http.StatusInternalServerError)
-			return
-		}
-		rowsAffected, err := res.RowsAffected()
-		if err != nil {
-			log.Println(err)
-			tx.Rollback()
-			http.Error(w, "Error retrieving deleted result", http.StatusInternalServerError)
-			return
-		}
-		if rowsAffected > 0 {
-			deletedIDs = append(deletedIDs, id)
-		}
-
-		if rowsAffected == 0 {
-			tx.Rollback()
-			http.Error(w, fmt.Sprintf("IDs %v do not exist", id), http.StatusBadRequest)
-			return
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "Error committing transaction", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -229,6 +192,7 @@ func DeleteOneTeacherHandler(w http.ResponseWriter, r *http.Request) {
 	err = sqlconnect.DeleteOneTeacher(id)
 	if err != nil {
 		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
