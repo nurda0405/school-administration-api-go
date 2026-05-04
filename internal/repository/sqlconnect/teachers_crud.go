@@ -3,11 +3,11 @@ package sqlconnect
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"reflect"
 	"restapi/internal/models"
-	"restapi/internal/repository/sqlconnect"
 	"restapi/pkg/utils"
 	"strings"
 )
@@ -75,7 +75,7 @@ func addFilters(r *http.Request, query string, args []interface{}) (string, []in
 }
 
 func GetTeachersDBHandler(teachers []models.Teacher, r *http.Request) ([]models.Teacher, error) {
-	db, err := sqlconnect.ConnectDB()
+	db, err := ConnectDB()
 	if err != nil {
 		// http.Error(w, "Error connecting to database", http.StatusInternalServerError)
 		return nil, utils.ErrorHandler(err, "Error retrieving data")
@@ -119,7 +119,7 @@ func GetTeachersDBHandler(teachers []models.Teacher, r *http.Request) ([]models.
 }
 
 func GetTeacherByID(id int) (models.Teacher, error) {
-	db, err := sqlconnect.ConnectDB()
+	db, err := ConnectDB()
 	if err != nil {
 		return models.Teacher{}, utils.ErrorHandler(err, "Error retrieving data")
 	}
@@ -136,13 +136,14 @@ func GetTeacherByID(id int) (models.Teacher, error) {
 }
 
 func AddNewTeachersHandler(r *http.Request) ([]models.Teacher, error) {
-	database, err := sqlconnect.ConnectDB()
+	database, err := ConnectDB()
 	if err != nil {
 		return nil, utils.ErrorHandler(err, "Error adding data")
 	}
 	defer database.Close()
 
-	stmt, err := database.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES (?,?,?,?,?)")
+	// stmt, err := database.Prepare("INSERT INTO teachers (first_name, last_name, email, class, subject) VALUES (?,?,?,?,?)")
+	stmt, err := database.Prepare(GenerateInsertQuery(models.Teacher{}))
 	if err != nil {
 		return nil, utils.ErrorHandler(err, "Error adding data")
 	}
@@ -154,7 +155,9 @@ func AddNewTeachersHandler(r *http.Request) ([]models.Teacher, error) {
 		return nil, utils.ErrorHandler(err, "Error adding data")
 	}
 	for i, newTeacher := range newTeachers {
-		res, err := stmt.Exec(newTeacher.FirstName, newTeacher.LastName, newTeacher.Email, newTeacher.Class, newTeacher.Subject)
+		// res, err := stmt.Exec(newTeacher.FirstName, newTeacher.LastName, newTeacher.Email, newTeacher.Class, newTeacher.Subject)
+		values := GetStructValues(newTeacher)
+		res, err := stmt.Exec(values...)
 		if err != nil {
 			return nil, utils.ErrorHandler(err, "Error adding data")
 		}
@@ -167,8 +170,45 @@ func AddNewTeachersHandler(r *http.Request) ([]models.Teacher, error) {
 	return newTeachers, nil
 }
 
+func GenerateInsertQuery(model interface{}) string {
+	modelType := reflect.TypeOf(model)
+	var columns, placeholders string
+
+	for i := 0; i < modelType.NumField(); i++ {
+		dbTag := modelType.Field(i).Tag.Get("db")
+		fmt.Println("dbTag", dbTag)
+		dbTag = strings.TrimSuffix(dbTag, ",omitempty")
+		if dbTag == "id" || dbTag == "" {
+			continue
+		}
+		if columns != "" {
+			columns += ", "
+			placeholders += ", "
+		}
+		columns += dbTag
+		placeholders += "?"
+	}
+	fmt.Printf("INSERT INTO teachers (%s) VALUES (%s) \n", columns, placeholders)
+	return fmt.Sprintf("INSERT INTO teachers (%s) VALUES (%s)", columns, placeholders)
+}
+
+func GetStructValues(model interface{}) []interface{} {
+	modelValue := reflect.ValueOf(model)
+	modelType := modelValue.Type()
+	values := []interface{}{}
+	for i := 0; i < modelType.NumField(); i++ {
+		dbTag := modelType.Field(i).Tag.Get("db")
+		dbTag = strings.TrimSuffix(dbTag, ",omitempty")
+		if dbTag != "" && dbTag != "id" {
+			values = append(values, modelValue.Field(i).Interface())
+		}
+	}
+	log.Println("Values: ", values)
+	return values
+}
+
 func UpdateTeacher(updatedTeacher models.Teacher, id int) (models.Teacher, error) {
-	db, err := sqlconnect.ConnectDB()
+	db, err := ConnectDB()
 	if err != nil {
 		return models.Teacher{}, utils.ErrorHandler(err, "Error updating data")
 	}
@@ -196,7 +236,7 @@ func UpdateTeacher(updatedTeacher models.Teacher, id int) (models.Teacher, error
 }
 
 func PatchTeachers(updates []map[string]interface{}) error {
-	db, err := sqlconnect.ConnectDB()
+	db, err := ConnectDB()
 	if err != nil {
 		return utils.ErrorHandler(err, "Error updating data")
 	}
@@ -274,7 +314,7 @@ func PatchTeachers(updates []map[string]interface{}) error {
 }
 
 func PatchOneTeacher(id int, updates map[string]interface{}) (models.Teacher, error) {
-	db, err := sqlconnect.ConnectDB()
+	db, err := ConnectDB()
 	if err != nil {
 		return models.Teacher{}, utils.ErrorHandler(err, "Error updating data")
 	}
@@ -315,7 +355,7 @@ func PatchOneTeacher(id int, updates map[string]interface{}) (models.Teacher, er
 }
 
 func DeleteTeachers(ids []int) ([]int, error) {
-	db, err := sqlconnect.ConnectDB()
+	db, err := ConnectDB()
 	if err != nil {
 		return nil, utils.ErrorHandler(err, "Error deleting data")
 	}
@@ -368,7 +408,7 @@ func DeleteTeachers(ids []int) ([]int, error) {
 }
 
 func DeleteOneTeacher(id int) error {
-	db, err := sqlconnect.ConnectDB()
+	db, err := ConnectDB()
 	if err != nil {
 		return utils.ErrorHandler(err, "Error deleting data")
 	}
