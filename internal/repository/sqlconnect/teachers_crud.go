@@ -2,7 +2,6 @@ package sqlconnect
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -135,7 +134,7 @@ func GetTeacherByID(id int) (models.Teacher, error) {
 	return teacher, nil
 }
 
-func AddNewTeachersHandler(r *http.Request) ([]models.Teacher, error) {
+func AddNewTeachersHandler(newTeachers []models.Teacher) ([]models.Teacher, error) {
 	database, err := ConnectDB()
 	if err != nil {
 		return nil, utils.ErrorHandler(err, "Error adding data")
@@ -149,11 +148,6 @@ func AddNewTeachersHandler(r *http.Request) ([]models.Teacher, error) {
 	}
 	defer stmt.Close()
 
-	var newTeachers []models.Teacher
-	err = json.NewDecoder(r.Body).Decode(&newTeachers)
-	if err != nil {
-		return nil, utils.ErrorHandler(err, "Error adding data")
-	}
 	for i, newTeacher := range newTeachers {
 		// res, err := stmt.Exec(newTeacher.FirstName, newTeacher.LastName, newTeacher.Email, newTeacher.Class, newTeacher.Subject)
 		values := GetStructValues(newTeacher)
