@@ -325,3 +325,37 @@ func DeleteOneTeacher(id int) error {
 	}
 	return nil
 }
+
+func GetStudentsByTeacherIDFromDb(teacherID string, students []models.Student) ([]models.Student, error) {
+	db, err := ConnectDB()
+	if err != nil {
+		log.Println(err)
+		return nil, utils.ErrorHandler(err, "error retrivieng data")
+	}
+	defer db.Close()
+
+	query := "SELECT id, first_name, last_name, email, class FROM students WHERE class = (SELECT class FROM teachers WHERE id = ?)"
+	rows, err := db.Query(query, teacherID)
+	if err != nil {
+		log.Println(err)
+		return nil, utils.ErrorHandler(err, "error retrivieng data")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var student models.Student
+		err := rows.Scan(&student.ID, &student.FirstName, &student.LastName, &student.Email, &student.Class)
+		if err != nil {
+			log.Println(err)
+			return nil, utils.ErrorHandler(err, "error retrivieng data")
+		}
+		students = append(students, student)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		log.Println(err)
+		return nil, utils.ErrorHandler(err, "error retrivieng data")
+	}
+	return students, nil
+}
