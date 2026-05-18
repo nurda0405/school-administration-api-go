@@ -5,14 +5,12 @@ import (
 )
 
 func MainRouter() *http.ServeMux {
+	eRouter := execsRouter()
 	sRouter := studentsRouter()
 	tRouter := teachersRouter()
 
+	sRouter.Handle("/", eRouter)
 	tRouter.Handle("/", sRouter)
 	return tRouter
 
-	// mux := http.NewServeMux()
-	// mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-
-	// })
 }
