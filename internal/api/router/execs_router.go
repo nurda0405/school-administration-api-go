@@ -8,15 +8,15 @@ import (
 func execsRouter() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /execs", handlers.GetStudentsHandler)
-	mux.HandleFunc("POST /execs", handlers.AddStudentsHandler)
-	mux.HandleFunc("PATCH /execs", handlers.PatchStudentsHandler)
+	mux.HandleFunc("GET /execs", handlers.GetExecsHandler)
+	mux.HandleFunc("POST /execs", handlers.AddExecsHandler)
+	mux.HandleFunc("PATCH /execs", handlers.PatchExecsHandler)
 
-	mux.HandleFunc("GET /execs/{id}", handlers.GetOneStudentHandler)
-	mux.HandleFunc("PATCH /execs/{id}", handlers.PatchOneStudentHandler)
-	mux.HandleFunc("DELETE /execs/{id}", handlers.DeleteOneStudentHandler)
+	mux.HandleFunc("GET /execs/{id}", handlers.GetOneExecHandler)
+	mux.HandleFunc("PATCH /execs/{id}", handlers.PatchOneExecHandler)
+	mux.HandleFunc("DELETE /execs/{id}", handlers.DeleteOneExecHandler)
+
 	mux.HandleFunc("POST /execs/{id}/updatepassword", handlers.DeleteOneStudentHandler)
-
 	mux.HandleFunc("POST /login", handlers.AddStudentsHandler)
 	mux.HandleFunc("POST /logout", handlers.AddStudentsHandler)
 	mux.HandleFunc("POST /forgotpassword", handlers.AddStudentsHandler)
