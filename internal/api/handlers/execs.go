@@ -1,15 +1,22 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"restapi/internal/models"
 	"restapi/internal/repository/sqlconnect"
+	"restapi/pkg/utils"
 	"strconv"
+	"strings"
+
+	"golang.org/x/crypto/argon2"
 )
 
 var (
@@ -234,4 +241,46 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+
+	if user.InactiveStatus {
+		http.Error(w, "The account is inactive", http.StatusBadRequest)
+		return
+	}
+
+	parts := strings.Split(user.Password, ".")
+	if len(parts) != 2 {
+		utils.ErrorHandler(errors.New("incorrect password format"), "incorrect password format")
+		http.Error(w, "Invalid password", http.StatusForbidden)
+		return
+	}
+
+	saltBase64 := parts[0]
+	hashedPasswordBase64 := parts[1]
+
+	salt, err := base64.StdEncoding.DecodeString(saltBase64)
+	if err != nil {
+		utils.ErrorHandler(err, "failed to decode the salt")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	hashedPassword, err := base64.StdEncoding.DecodeString(hashedPasswordBase64)
+	if err != nil {
+		utils.ErrorHandler(err, "failed to decode the hashed password")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	hash := argon2.IDKey([]byte(req.Password), salt, 1, 64*1024, 4, 32)
+
+	if len(hash) != len(hashedPassword) {
+		http.Error(w, "Incorrect Password", http.StatusBadRequest)
+		return
+	}
+
+	if subtle.ConstantTimeCompare(hash, hashedPassword) != 1 {
+		http.Error(w, "Incorrect Password", http.StatusForbidden)
+		return
+	}
+
 }
