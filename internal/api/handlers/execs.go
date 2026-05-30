@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -199,4 +200,38 @@ func DeleteOneExecHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(response)
 
+}
+
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	var req models.Exec
+	err := json.NewDecoder(r.Body).Decode(req)
+	if err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if req.Username == "" || req.Password == "" {
+		http.Error(w, "Username and password are required", http.StatusBadRequest)
+		return
+	}
+
+	db, err := sqlconnect.ConnectDB()
+	if err != nil {
+		http.Error(w, "Error logging in", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	user := &models.Exec{}
+	err = db.QueryRow("SELECT id, first_name, last_name, email, username, password, inactive_status, role FROM execs WHERE username = ?",
+		req.Username).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username, &user.Password, &user.InactiveStatus, &user.Role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "User not found", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
