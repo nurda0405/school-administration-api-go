@@ -1,11 +1,7 @@
 package handlers
 
 import (
-	"crypto/subtle"
-	"database/sql"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,9 +10,7 @@ import (
 	"restapi/internal/repository/sqlconnect"
 	"restapi/pkg/utils"
 	"strconv"
-	"strings"
-
-	"golang.org/x/crypto/argon2"
+	"time"
 )
 
 var (
@@ -211,7 +205,7 @@ func DeleteOneExecHandler(w http.ResponseWriter, r *http.Request) {
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var req models.Exec
-	err := json.NewDecoder(r.Body).Decode(req)
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -223,22 +217,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := sqlconnect.ConnectDB()
+	user, err := sqlconnect.GetUserByUsername(req.Username)
 	if err != nil {
-		http.Error(w, "Error logging in", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	user := &models.Exec{}
-	err = db.QueryRow("SELECT id, first_name, last_name, email, username, password, inactive_status, role FROM execs WHERE username = ?",
-		req.Username).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Username, &user.Password, &user.InactiveStatus, &user.Role)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "User not found", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -247,40 +228,34 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parts := strings.Split(user.Password, ".")
-	if len(parts) != 2 {
-		utils.ErrorHandler(errors.New("incorrect password format"), "incorrect password format")
-		http.Error(w, "Invalid password", http.StatusForbidden)
-		return
-	}
-
-	saltBase64 := parts[0]
-	hashedPasswordBase64 := parts[1]
-
-	salt, err := base64.StdEncoding.DecodeString(saltBase64)
+	err = utils.VerifyPassword(req.Password, user.Password)
 	if err != nil {
-		utils.ErrorHandler(err, "failed to decode the salt")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
-	hashedPassword, err := base64.StdEncoding.DecodeString(hashedPasswordBase64)
+	tokenString, err := utils.SignToken(user.ID, user.Username, user.Role)
 	if err != nil {
-		utils.ErrorHandler(err, "failed to decode the hashed password")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, "Could not generate login token", http.StatusInternalServerError)
 		return
 	}
 
-	hash := argon2.IDKey([]byte(req.Password), salt, 1, 64*1024, 4, 32)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "Bearer",
+		Value:    tokenString,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		Expires:  time.Now().Add(24 * time.Hour),
+	})
 
-	if len(hash) != len(hashedPassword) {
-		http.Error(w, "Incorrect Password", http.StatusBadRequest)
-		return
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	response := struct {
+		Token string `json:"token"`
+	}{
+		Token: tokenString,
 	}
-
-	if subtle.ConstantTimeCompare(hash, hashedPassword) != 1 {
-		http.Error(w, "Incorrect Password", http.StatusForbidden)
-		return
-	}
+	json.NewEncoder(w).Encode(response)
 
 }
