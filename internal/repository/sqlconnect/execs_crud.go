@@ -1,18 +1,14 @@
 package sqlconnect
 
 import (
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"reflect"
 	"restapi/internal/models"
 	"restapi/pkg/utils"
-
-	"golang.org/x/crypto/argon2"
+	"time"
 )
 
 func GetExecsDBHandler(execs []models.Exec, r *http.Request) ([]models.Exec, error) {
@@ -89,21 +85,11 @@ func AddNewExecsHandler(newExecs []models.Exec) ([]models.Exec, error) {
 	defer stmt.Close()
 
 	for i, newExec := range newExecs {
-		if newExec.Password == "" {
-			return nil, utils.ErrorHandler(errors.New("password is blank"), "please enter password")
-		}
-		salt := make([]byte, 16)
-		_, err := rand.Read(salt)
-
+		encodedHash, err, _ := utils.HashPassword(newExec.Password)
 		if err != nil {
-			return nil, utils.ErrorHandler(errors.New("failed to generate salt"), "error adding data")
+			return nil, err
 		}
 
-		hash := argon2.IDKey([]byte(newExec.Password), salt, 1, 64*1024, 4, 32)
-		saltBase64 := base64.StdEncoding.EncodeToString(salt)
-		hashBase64 := base64.StdEncoding.EncodeToString(hash)
-
-		encodedHash := fmt.Sprintf("%s.%s", saltBase64, hashBase64)
 		newExec.Password = encodedHash
 		newExecs[i].Password = encodedHash
 
@@ -283,4 +269,37 @@ func GetUserByUsername(username string) (*models.Exec, error) {
 		return nil, utils.ErrorHandler(err, "Database error")
 	}
 	return user, nil
+}
+
+func UpdatePasswordInDb(userID int, currentPassword, updatedPassword string) (error, int) {
+	db, err := ConnectDB()
+	if err != nil {
+		return utils.ErrorHandler(err, "Internal server error"), http.StatusInternalServerError
+	}
+
+	var username string
+	var userPassword string
+	var role string
+
+	err = db.QueryRow("SELECT username, password, role FROM execs WHERE id = ?", userID).Scan(&username, &userPassword, &role)
+	if err != nil {
+		return utils.ErrorHandler(err, "User not found"), http.StatusBadRequest
+	}
+
+	err = utils.VerifyPassword(currentPassword, userPassword)
+	if err != nil {
+		return err, http.StatusInternalServerError
+	}
+
+	hashedPassword, err, statusCode := utils.HashPassword(updatedPassword)
+	if err != nil {
+		return err, statusCode
+	}
+
+	currentTime := time.Now().Format(time.RFC3339)
+	_, err = db.Exec("UPDATE execs SET password = ?, password_changed_at = ? WHERE id = ?", hashedPassword, currentTime, userID)
+	if err != nil {
+		return errors.New("Error updating password"), http.StatusInternalServerError
+	}
+	return nil, http.StatusAccepted
 }

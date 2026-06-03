@@ -273,3 +273,40 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Logged out successfully"}`))
 }
+
+func UpdatePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	userID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var req models.UpdatePasswordRequest
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	if req.CurrentPassword == "" || req.UpdatedPassword == "" {
+		http.Error(w, "Both of the passwords are required", http.StatusBadRequest)
+		return
+	}
+
+	err, statusCode := sqlconnect.UpdatePasswordInDb(userID, req.CurrentPassword, req.UpdatedPassword)
+	if err != nil {
+		http.Error(w, err.Error(), statusCode)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	response := struct {
+		Message string `json:"message"`
+	}{
+		Message: "Password successfully changed",
+	}
+	json.NewEncoder(w).Encode(response)
+}

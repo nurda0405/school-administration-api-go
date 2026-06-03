@@ -1,9 +1,12 @@
 package utils
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"net/http"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -38,4 +41,22 @@ func VerifyPassword(password, encodedHash string) error {
 		return ErrorHandler(errors.New("Incorrect Password"), "Incorrect Password")
 	}
 	return nil
+}
+
+func HashPassword(password string) (string, error, int) {
+	if password == "" {
+		return "", errors.New("Please, enter password"), http.StatusBadRequest
+	}
+	salt := make([]byte, 16)
+	_, err := rand.Read(salt)
+
+	if err != nil {
+		return "", errors.New("Error handling password"), http.StatusInternalServerError
+	}
+
+	hash := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
+	saltBase64 := base64.StdEncoding.EncodeToString(salt)
+	hashBase64 := base64.StdEncoding.EncodeToString(hash)
+	encodedHash := fmt.Sprintf("%s.%s", saltBase64, hashBase64)
+	return encodedHash, nil, http.StatusCreated
 }
