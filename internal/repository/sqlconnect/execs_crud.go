@@ -1,14 +1,22 @@
 package sqlconnect
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
 	"restapi/internal/models"
 	"restapi/pkg/utils"
+	"strconv"
 	"time"
+
+	"github.com/go-mail/mail/v2"
 )
 
 func GetExecsDBHandler(execs []models.Exec, r *http.Request) ([]models.Exec, error) {
@@ -302,4 +310,60 @@ func UpdatePasswordInDb(userID int, currentPassword, updatedPassword string) (er
 		return errors.New("Error updating password"), http.StatusInternalServerError
 	}
 	return nil, http.StatusAccepted
+}
+
+func ForgotPasswordDbHandler(email string) (error, int) {
+	db, err := ConnectDB()
+	if err != nil {
+		return utils.ErrorHandler(err, "Internal Server Error"), http.StatusInternalServerError
+	}
+	defer db.Close()
+
+	var exec models.Exec
+	err = db.QueryRow("SELECT id FROM execs WHERE email = ?", req.Email).Scan(&exec.ID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return errors.New("Not found"), http.StatusNotFound
+		}
+		return utils.ErrorHandler(err, "Internal server error"), http.StatusInternalServerError
+	}
+
+	duration, err := strconv.Atoi(os.Getenv("RESET_TOKEN_EXP_DURATION"))
+	if err != nil {
+		return utils.ErrorHandler(err, "Failed to send password reset email"), http.StatusInternalServerError
+	}
+
+	mins := time.Duration(duration)
+	expiry := time.Now().Add(mins * time.Minute).Format(time.RFC3339)
+
+	tokenBytes := make([]byte, 32)
+	_, err = rand.Read(tokenBytes)
+	if err != nil {
+		return utils.ErrorHandler(err, "Failed to send password reset email"), http.StatusInternalServerError
+	}
+	token := hex.EncodeToString(tokenBytes)
+	hashedToken := sha256.Sum256(tokenBytes)
+	hashedTokenString := hex.EncodeToString(hashedToken[:])
+
+	_, err = db.Exec("UPDATE execs SET password_reset_code = ?, password_code_expires = ? WHERE id = ?", hashedTokenString, expiry, exec.ID)
+	if err != nil {
+		return utils.ErrorHandler(err, "Internal error"), http.StatusInternalServerError
+	}
+
+	resetURL := fmt.Sprintf("https://localhost:3000/execs/resetpassword/reset/%s", token)
+	message := fmt.Sprintf("You can reset your password via this link: \n %s \n If you didn't request password reset, please ignore this message. This link is only valid for %v minutes", resetURL, duration)
+
+	m := mail.NewMessage()
+	m.SetHeader("From", "schooladmin@school.com")
+	m.SetHeader("To", req.Email)
+	m.SetHeader("Subject", "Your password reset link")
+	m.SetHeader("text", message)
+	m.SetHeader("textEncoding", "7bit")
+
+	d := mail.NewDialer("localhost", 1025, "", "")
+	err = d.DialAndSend(m)
+	if err != nil {
+		return utils.ErrorHandler(err, "Failed to send password reset email"), http.StatusInternalServerError
+	}
+	return nil, 0
 }
