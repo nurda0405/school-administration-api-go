@@ -20,7 +20,7 @@ func execsRouter() *http.ServeMux {
 	mux.HandleFunc("POST /execs/login", handlers.LoginHandler)
 	mux.HandleFunc("POST /execs/logout", handlers.LogoutHandler)
 	mux.HandleFunc("POST /execs/forgotpassword", handlers.ForgotPasswordHandler)
-	mux.HandleFunc("POST /execs/resetpassword/reset/{resetcode}", handlers.AddStudentsHandler)
+	mux.HandleFunc("POST /execs/resetpassword/reset/{resetcode}", handlers.ResetPasswordHandler)
 
 	return mux
 }

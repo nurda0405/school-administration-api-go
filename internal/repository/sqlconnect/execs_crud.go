@@ -320,7 +320,7 @@ func ForgotPasswordDbHandler(email string) (error, int) {
 	defer db.Close()
 
 	var exec models.Exec
-	err = db.QueryRow("SELECT id FROM execs WHERE email = ?", req.Email).Scan(&exec.ID)
+	err = db.QueryRow("SELECT id FROM execs WHERE email = ?", email).Scan(&exec.ID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return errors.New("Not found"), http.StatusNotFound
@@ -351,19 +351,46 @@ func ForgotPasswordDbHandler(email string) (error, int) {
 	}
 
 	resetURL := fmt.Sprintf("https://localhost:3000/execs/resetpassword/reset/%s", token)
-	message := fmt.Sprintf("You can reset your password via this link: \n %s \n If you didn't request password reset, please ignore this message. This link is only valid for %v minutes", resetURL, duration)
+	message := fmt.Sprintf(
+		`<p>You can reset your password via this link:</p> <a href="%s">%s</a> <p>If you didn't request a password reset, ignore this email. This link is only valid for %v minutes.</p>`, resetURL, resetURL, duration)
 
 	m := mail.NewMessage()
 	m.SetHeader("From", "schooladmin@school.com")
-	m.SetHeader("To", req.Email)
+	m.SetHeader("To", email)
 	m.SetHeader("Subject", "Your password reset link")
-	m.SetHeader("text", message)
-	m.SetHeader("textEncoding", "7bit")
+	m.SetHeader("html", message)
 
 	d := mail.NewDialer("localhost", 1025, "", "")
 	err = d.DialAndSend(m)
 	if err != nil {
 		return utils.ErrorHandler(err, "Failed to send password reset email"), http.StatusInternalServerError
+	}
+	return nil, 0
+}
+
+func ResetPasswordDbHandler(hashedTokenString string, newPassword string) (error, int) {
+	db, err := ConnectDB()
+	if err != nil {
+		return utils.ErrorHandler(err, "Internal server error"), http.StatusInternalServerError
+	}
+	defer db.Close()
+
+	var user models.Exec
+	query := "SELECT id, email FROM execs WHERE password_reset_code = ? AND password_code_expires > ?"
+	err = db.QueryRow(query, hashedTokenString, time.Now().Format(time.RFC3339)).Scan(&user.ID, &user.Email)
+	if err != nil {
+		return errors.New("Password reset code is incorrect or expired"), http.StatusBadRequest
+	}
+
+	hashedPassword, err, statusCode := utils.HashPassword(newPassword)
+	if err != nil {
+		return err, statusCode
+	}
+
+	updateQuery := "UPDATE execs SET password = ?, password_reset_code = NULL, password_code_expires = NULL, password_changed_at = ?"
+	_, err = db.Exec(updateQuery, hashedPassword, time.Now().Format(time.RFC3339))
+	if err != nil {
+		return utils.ErrorHandler(err, "Internal server error"), http.StatusInternalServerError
 	}
 	return nil, 0
 }

@@ -13,8 +13,8 @@ func MiddlewaresExcludePaths(middleware func(http.Handler) http.Handler, exclude
 					next.ServeHTTP(w, r)
 					return
 				}
-				middleware(next).ServeHTTP(w, r)
 			}
+			middleware(next).ServeHTTP(w, r)
 		})
 	}
 }
