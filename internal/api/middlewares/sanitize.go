@@ -14,18 +14,18 @@ import (
 )
 
 func XSSMiddleware(next http.Handler) http.Handler {
-	fmt.Println("--------Inside XSSMiddleware----------")
+	// fmt.Println("--------Inside XSSMiddleware----------")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("Original Path: ", r.URL.Path)
+		// fmt.Println("Original Path: ", r.URL.Path)
 		sanitizedPath, err := clean(r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		r.URL.Path = sanitizedPath.(string)
-		fmt.Println("Sanitized Path: ", r.URL.Path)
+		// fmt.Println("Sanitized Path: ", r.URL.Path)
 
-		fmt.Println("Original Query: ", r.URL.Query())
+		// fmt.Println("Original Query: ", r.URL.Query())
 		params := r.URL.Query()
 		sanitizedQuery := make(map[string][]string)
 		for k, v := range params {
@@ -50,7 +50,7 @@ func XSSMiddleware(next http.Handler) http.Handler {
 
 		r.URL.Path = sanitizedPath.(string)
 		r.URL.RawQuery = url.Values(sanitizedQuery).Encode()
-		fmt.Println("Sanitized Query: ", r.URL.Query())
+		// fmt.Println("Sanitized Query: ", r.URL.Query())
 
 		if r.Header.Get("Content-Type") == "application/json" {
 			if r.Body != nil {
@@ -59,7 +59,7 @@ func XSSMiddleware(next http.Handler) http.Handler {
 					http.Error(w, utils.ErrorHandler(err, "Error reading request body").Error(), http.StatusBadRequest)
 					return
 				}
-				fmt.Println("Original Body: ", string(bodyBytes))
+				// fmt.Println("Original Body: ", string(bodyBytes))
 
 				bodyString := strings.TrimSpace(string(bodyBytes))
 				r.Body = io.NopCloser(bytes.NewReader([]byte(bodyString)))
@@ -83,7 +83,7 @@ func XSSMiddleware(next http.Handler) http.Handler {
 					}
 
 					r.Body = io.NopCloser(bytes.NewReader([]byte(sanitizedBody)))
-					fmt.Println("Sanitized Body: ", string(sanitizedBody))
+					// fmt.Println("Sanitized Body: ", string(sanitizedBody))
 				}
 			}
 		} else if r.Header.Get("Content-Type") != "" {

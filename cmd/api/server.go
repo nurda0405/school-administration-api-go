@@ -2,34 +2,62 @@ package main
 
 import (
 	"crypto/tls"
+	"embed"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	mw "restapi/internal/api/middlewares"
 	"restapi/internal/api/router"
-	"restapi/internal/repository/sqlconnect"
 	"restapi/pkg/utils"
 	"time"
 
 	"github.com/joho/godotenv"
 )
 
-func main() {
-	err := godotenv.Load()
+//go:embed .env
+var envFile embed.FS
+
+func loadEnvFromEmbeddedFile() {
+	content, err := envFile.ReadFile(".env")
 	if err != nil {
-		return
-	}
-	_, err = sqlconnect.ConnectDB()
-	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalf("Error reading .env file: %v", err)
 	}
 
-	cert := "cert.pem"
-	key := "key.pem"
+	tempFile, err := os.CreateTemp("", ".env")
+	if err != nil {
+		log.Fatalf("Error adding a temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	_, err = tempFile.Write(content)
+	if err != nil {
+		log.Fatalf("Error writing to temp file: %v", err)
+	}
+	err = tempFile.Close()
+	if err != nil {
+		log.Fatalf("Error closing temp file: %v", err)
+	}
+
+	err = godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error closing temp file: %v", err)
+
+	}
+}
+
+func main() {
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	return
+	// }
+
+	loadEnvFromEmbeddedFile()
+
+	cert := os.Getenv("CERT_FILE")
+	key := os.Getenv("KEY_FILE")
 	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
+		MinVersion: tls.VersionTLS10,
 	}
 
 	rl := mw.NewRateLimiter(2, 5*time.Second)
@@ -52,7 +80,7 @@ func main() {
 		TLSConfig: tlsConfig,
 	}
 
-	err = server.ListenAndServeTLS(cert, key)
+	err := server.ListenAndServeTLS(cert, key)
 	if err != nil {
 		log.Fatalln("Error running the server:", err)
 	}
