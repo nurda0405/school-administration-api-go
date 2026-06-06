@@ -3,7 +3,6 @@ package middlewares
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,9 +12,7 @@ import (
 )
 
 func JWTMiddleware(next http.Handler) http.Handler {
-	fmt.Println("--------JWT Middleware--------")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("-------- Inside JWT Middleware--------")
 		token, err := r.Cookie("Bearer")
 		if err != nil {
 			http.Error(w, "Authorization Header Missing", http.StatusUnauthorized)
@@ -37,9 +34,7 @@ func JWTMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if parsedToken.Valid {
-			log.Println("Valid JWT")
-		} else {
+		if !parsedToken.Valid {
 			http.Error(w, "Invalid JWT token", http.StatusUnauthorized)
 			return
 		}
@@ -50,14 +45,11 @@ func JWTMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "role", claims["role"])
-		ctx = context.WithValue(ctx, "username", claims["username"])
-		ctx = context.WithValue(ctx, "expiresAt", claims["exp"])
-		ctx = context.WithValue(ctx, "userID", claims["uid"])
+		ctx := context.WithValue(r.Context(), utils.ContextKey("role"), claims["role"])
+		ctx = context.WithValue(ctx, utils.ContextKey("username"), claims["username"])
+		ctx = context.WithValue(ctx, utils.ContextKey("expiresAt"), claims["exp"])
+		ctx = context.WithValue(ctx, utils.ContextKey("userID"), claims["uid"])
 
-		fmt.Println(ctx)
 		next.ServeHTTP(w, r.WithContext(ctx))
-		fmt.Println("--------The end of JWT Middleware--------")
-
 	})
 }

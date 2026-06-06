@@ -198,11 +198,11 @@ func PatchOneExec(id int, updates map[string]interface{}) (models.Exec, error) {
 	if err != nil {
 		return models.Exec{}, utils.ErrorHandler(err, "Error updating data")
 	}
-
 	defer db.Close()
+
 	var existingExec models.Exec
-	err = db.QueryRow("SELECT id, first_name, last_name, email, username FROM execs WHERE id = ?", id).Scan(&existingExec.ID, &existingExec.FirstName,
-		&existingExec.LastName, &existingExec.Email, &existingExec.Username)
+	err = db.QueryRow("SELECT id, first_name, last_name, email, username, role FROM execs WHERE id = ?", id).Scan(&existingExec.ID, &existingExec.FirstName,
+		&existingExec.LastName, &existingExec.Email, &existingExec.Username, &existingExec.Role)
 
 	if err == sql.ErrNoRows {
 		return models.Exec{}, utils.ErrorHandler(err, "Error updating data")
@@ -224,8 +224,8 @@ func PatchOneExec(id int, updates map[string]interface{}) (models.Exec, error) {
 			}
 		}
 	}
-	_, err = db.Exec("UPDATE execs SET first_name = ?, last_name = ?, email = ?, username = ? WHERE id = ?", existingExec.FirstName, existingExec.LastName,
-		existingExec.Email, existingExec.Username, existingExec.ID)
+	_, err = db.Exec("UPDATE execs SET first_name = ?, last_name = ?, email = ?, username = ?, role = ? WHERE id = ?", existingExec.FirstName, existingExec.LastName,
+		existingExec.Email, existingExec.Username, existingExec.Role, existingExec.ID)
 
 	if err != nil {
 		log.Println(err)
